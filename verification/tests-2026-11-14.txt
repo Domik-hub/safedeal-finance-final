@@ -1,0 +1,35 @@
+SafeDeal local verification — 14 November 2026
+Node.js 24.22.1; contract and HTTP suites executed against local Ganache.
+Command: node --test --test-concurrency=1 test/workflow.test.cjs test/app.test.cjs
+Optional native uWS binary unavailable; Ganache used its JavaScript fallback.
+
+✔ HTTP boundary rejects cross-origin, missing-token and wrong-role requests (2397.4901ms)
+✔ HTTP forms reject invalid amounts and invalid calendar dates before creating a milestone (851.9669ms)
+✔ a saved delivery and attachment follow the complete client and freelancer workflow (3503.9777ms)
+✔ the dispute endpoint records reasons, arbiter split and a conserved final settlement (3840.1215ms)
+✔ pause and resume are enforced on the API and the contract (1092.4145ms)
+✔ contract state, off-chain descriptions and attachments survive a server restart (2156.1598ms)
+✔ normal flow releases the full fictional milestone only after adapter confirmation (2002.4934ms)
+✔ an outsider cannot confirm a reservation (866.9653ms)
+✔ an unreserved milestone cannot be submitted or approved (976.3887ms)
+✔ only the agreed freelancer may submit evidence (978.5532ms)
+✔ only the client may approve submitted work (1449.5018ms)
+✔ a disputed milestone cannot settle before an arbiter decision (818.4276ms)
+✔ only the arbiter may decide a dispute (987.8324ms)
+✔ a split decision conserves the complete fictional amount (1615.968ms)
+✔ a full refund releases zero to the freelancer (1120.6622ms)
+✔ duplicate confirmation cannot release the amount twice (1223.876ms)
+✔ a settlement reference cannot be replayed on another milestone (1817.2084ms)
+✔ missing adapter confirmation leaves an approved milestone unsettled (938.8027ms)
+✔ pause blocks actions and only the admin can change pause status (1286.8848ms)
+✔ invalid amounts, self-contracting and empty evidence are rejected (663.0318ms)
+✔ splits above 100 percent are rejected (926.8286ms)
+✔ the contract rejects native asset transfers (189.4331ms)
+ℹ tests 22
+ℹ suites 0
+ℹ pass 22
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 50322.2308
