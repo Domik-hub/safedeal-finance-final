@@ -76,11 +76,9 @@ Persistent local test accounts are deterministic for repeatable development. The
 
 The contract and application use the MIT license in this folder. Dependencies are pinned: ethers 6.15.0 (MIT), Ganache 7.9.2 (MIT), solc 0.8.30 (GPL-3.0 compiler package). Preserve each dependency's license when distributing it. The source archive excludes dependency binaries. Official sources: https://github.com/ethers-io/ethers.js ; https://github.com/trufflesuite/ganache ; https://github.com/ethereum/solc-js . No OpenZeppelin template was used.
 
-## Financial model
+## Report and calculations
 
-Run `python finance/calculate_finance.py` with Python 3 (standard library only). It writes `finance/financial_model.json` and prints the reference case and stresses. Source URLs, access dates, quantities, assumptions and limitations are included in the script and JSON. `finance/sources-and-calculations.txt` explains the interpretation.
-
-The 635 milestones/month reference is the minimum constant volume satisfying the chosen three-year NPV hurdle, **not observed demand**. Published acquiring rates do not establish a usable escrow integration. No surveys, customer orders, bank agreement or independent validator commitments are claimed.
+Financial calculations, assumptions and source citations are retained in the separate academic report. They are not published in this repository.
 
 ## AI disclosure and contribution history
 
