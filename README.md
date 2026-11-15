@@ -70,7 +70,7 @@ Use Overview for current totals, Milestones for search/status filters, Activity 
 - Simulated: client identities, business agreements, KZT balances, payment reservations and settlement confirmations. There is no bank/provider integration or real transfer of assets.
 - The Demo role selector is a deliberate testing tool, not production authentication. The server listens only on the local loopback interface. Do not expose this server to the internet.
 - No four-organization validator network has been deployed. The proposed consortium in the presentation is a future architecture; this implementation is one local Ganache development chain, ID 1337.
-- The proposed 10% service fee and 16% VAT on that fee are illustrative inputs from the finance model. They are displayed separately, rounded to whole KZT for the UI, and are not charged or remitted. For a 120,000 KZT principal: 12,000 fee + 1,920 VAT = 133,920 estimated total. These planning inputs are not customer validation.
+- The proposed 10% commission and review-service fees are illustrative. The interface displays an assumed 16% VAT on both commission and review services, rounded to whole KZT. It does not charge or remit tax. A 100,000 KZT milestone with its initial review shows 10,000 commission + 15,000 review + 4,000 VAT = 129,000 total. These prices are not customer validation.
 
 ## Tests and verification
 
@@ -90,11 +90,11 @@ npm run test:all
 
 Browser verification also covered the full normal and disputed workflows, actual file download, search/filter behavior, refresh, running the contract tests from the UI, and layouts at 1440×960 and 390×844. A fresh verification log is in `verification/` in this repository. Passing tests are not an external security audit.
 
-## Previous recorded demonstration
+## Current recorded demonstration
 
-[Watch the English demo (2:53)](https://drive.google.com/file/d/1OYpueuP28cloxXEb5lAvWSyM6pL3cRbn/view).
+[Watch the English-captioned demo (2:44)](https://drive.google.com/file/d/1OYpueuP28cloxXEb5lAvWSyM6pL3cRbn/view).
 
-This earlier recording shows the original milestone workflow. It does not show the new marketplace, portfolios or scope-change feature. It covers local deployment, creation, reservation, file delivery and download, approval, settlement, a dispute, a 60/40 arbiter decision and 16 contract tests. All transactions and people are fictional. Its example principal is KZT 120,000; the financial model uses a separately derived KZT 100,000 benchmark.
+Recorded on 15 November 2026 from the working local website. The video shows deployment, a posted cafe-website project, a proposal linked to a portfolio, expert findings, a corrected delivery and passing recheck, a separately quoted extra feature, original-milestone approval and simulated settlement, and 16 passing contract tests in the UI. The original principal is 100,000 KZT and the separately agreed extra milestone is 20,000 KZT. All people, findings, work and money are fictional. This demonstrates the workflow, not an actual quality certification or real customer transaction. Pauses were shortened and English captions were added to keep the recording under three minutes.
 
 ## Source map
 
