@@ -5,6 +5,7 @@ const crypto = require('node:crypto');
 const { spawn } = require('node:child_process');
 const { Contract } = require('ethers');
 const { compile, localChain, deploy, send, hash } = require('./lib.cjs');
+const { createMarketplace } = require('./marketplace.cjs');
 
 const STATES = ['Empty', 'Created', 'Reserved', 'Submitted', 'Disputed', 'Approved', 'Settled'];
 const ROLES = ['client', 'freelancer', 'adapter', 'arbiter', 'admin'];
@@ -59,6 +60,7 @@ async function createApp({ dataDir = process.env.SAFEDEAL_DATA_DIR || path.join(
     meta.log.push({ id: crypto.randomUUID(), dealId: id || null, title, role, details, at: new Date().toISOString(), block: receipt?.blockNumber || null, tx: receipt?.hash || null });
   };
   const addresses = Object.fromEntries(await Promise.all(ROLES.map(async role => [role, await f[role].getAddress()])));
+  const market = createMarketplace({ meta, getFixture: () => f, save, log, send, hash, fail });
   const viewDeal = async id => {
     const m = await f.contract.milestones(id);
     if (!Number(m.state)) return null;
@@ -71,7 +73,7 @@ async function createApp({ dataDir = process.env.SAFEDEAL_DATA_DIR || path.join(
   const snapshot = async () => {
     const ids = f.contract ? Array.from({ length: Number(await f.contract.nextId()) - 1 }, (_, i) => i + 1) : [];
     return { token, roles: ROLE_NAMES, addresses, network: { name: 'Ganache local EVM', chainId: 1337, deployed: Boolean(f.contract), address: meta.address, paused: f.contract ? await f.contract.paused() : false,
-      block: Number(await chain.provider.send('eth_blockNumber', [])), educational: true }, deals: await Promise.all(ids.map(viewDeal)), activity: meta.log, tests: meta.tests };
+      block: Number(await chain.provider.send('eth_blockNumber', [])), educational: true }, deals: await Promise.all(ids.map(viewDeal)), marketplace: market.snapshot(), activity: meta.log, tests: meta.tests };
   };
   async function mutate(action, body, id) {
     if (!ACTION_ROLES[action]?.includes(body.role)) fail('This action is not available to the selected role.', 403);
@@ -85,7 +87,7 @@ async function createApp({ dataDir = process.env.SAFEDEAL_DATA_DIR || path.join(
         log('Workspace contract deployed', body.role, null, await f.contract.deploymentTransaction().wait(), 'Solidity 0.8.30 · local chain 1337');
       } else {
         if (!f.contract) fail('Deploy the workspace contract in Network & tests first.', 409);
-        const c = f.contract.connect(f[body.role]);
+        let c = f.contract.connect(f[body.role]);
         if (action === 'create') {
           const title = required(body.title, 'Milestone title', 100);
           const description = required(body.description, 'Scope and acceptance criteria', 3000);
@@ -104,6 +106,8 @@ async function createApp({ dataDir = process.env.SAFEDEAL_DATA_DIR || path.join(
         } else {
           if (!Number.isSafeInteger(id) || id < 1 || !(await viewDeal(id))) fail('Milestone not found.', 404);
           const extra = meta.deals[id] ||= {};
+          market.assertFreelancer(body, extra);
+          if (body.role === 'freelancer' && extra.freelancerId) c = f.contract.connect(market.signer(extra.freelancerId));
           if (action === 'reserve' || action === 'settle') {
             const reference = required(body.reference, 'Confirmation reference', 100);
             const receipt = await send(action === 'reserve' ? c.reserve(id, hash(reference)) : c.confirmSettlement(id, hash(reference)));
@@ -121,12 +125,23 @@ async function createApp({ dataDir = process.env.SAFEDEAL_DATA_DIR || path.join(
               if (!bytes.length || bytes.length > 300000) fail('Attach a non-empty file up to 300 KB.');
               file = { name, base64: bytes.toString('base64'), sha256: crypto.createHash('sha256').update(bytes).digest('hex') };
             }
-            const evidence = { message, url, file, submittedAt: new Date().toISOString() };
-            const receipt = await send(c.submit(id, hash(JSON.stringify({ message, url, fileHash: file?.sha256 || '' }))));
+            let criteriaEvidence = [];
+            if (extra.criteria?.length) {
+              if (!Array.isArray(body.criteriaEvidence) || body.criteriaEvidence.length !== extra.criteria.length) fail('Explain how the delivery meets every agreed acceptance check.');
+              criteriaEvidence = extra.criteria.map(check => {
+                const entries = body.criteriaEvidence.filter(e => e.id === check.id);
+                if (entries.length !== 1) fail('Include each acceptance check exactly once.');
+                return { id: check.id, note: required(entries[0].note, 'Evidence for acceptance check', 600) };
+              });
+            }
+            const evidence = { message, url, file, criteriaEvidence, submittedAt: new Date().toISOString() };
+            const receipt = await send(c.submit(id, hash(JSON.stringify({ message, url, fileHash: file?.sha256 || '', criteriaEvidence }))));
             extra.evidence = evidence;
             log('Work submitted for review', body.role, id, receipt, file ? `Attachment: ${file.name}` : 'Delivery notes recorded');
           } else if (action === 'approve') {
+            if (extra.criteria?.length && (!Array.isArray(body.checkedCriteriaIds) || !extra.criteria.every(check => body.checkedCriteriaIds.includes(check.id)))) fail('Review and confirm every agreed acceptance check before approving.');
             const receipt = await send(c.approve(id));
+            if (extra.criteria?.length) extra.acceptanceReview = { checkedCriteriaIds: extra.criteria.map(c => c.id), reviewedAt: new Date().toISOString() };
             log('Work approved by client', body.role, id, receipt, '100% release authorized; adapter confirmation still required.');
           } else if (action === 'dispute') {
             const reason = required(body.reason, 'Dispute reason', 2000);
@@ -158,6 +173,15 @@ async function createApp({ dataDir = process.env.SAFEDEAL_DATA_DIR || path.join(
       if (req.headers.host !== expectedHost && req.headers.host !== `localhost:${server.address()?.port}`) fail('Invalid local host.', 403);
       const url = new URL(req.url, `http://${expectedHost}`);
       if (req.method === 'GET' && url.pathname === '/api/state') return json(await snapshot());
+      const agreement = url.pathname.match(/^\/api\/market\/jobs\/([^/]+)\/agreement$/);
+      if (req.method === 'GET' && agreement) {
+        const project = market.snapshot().jobs.find(j => j.id === agreement[1]);
+        if (!project?.agreement) fail('An accepted scope agreement is not available for this project.', 404);
+        const state = await snapshot();
+        const records = state.deals.filter(d => d.projectId === project.id).map(d => ({ id: d.id, title: d.title, amount: d.amount, dueDate: d.dueDate, criteria: d.criteria, termsHash: d.termsHash, state: d.state, changeId: d.changeId }));
+        res.writeHead(200, { 'Content-Type': 'application/json', 'Content-Disposition': 'attachment; filename="safedeal-scope-agreement.json"', 'Cache-Control': 'no-store' });
+        return res.end(JSON.stringify({ educational: true, project: project.title, agreement: project.agreement, milestones: records, notice: 'Local educational record. Fictional identities and amounts. No real payment or legal signature.' }, null, 2));
+      }
       if (req.method === 'GET' && /^\/api\/deals\/\d+\/attachment$/.test(url.pathname)) {
         const id = Number(url.pathname.split('/')[3]); const file = meta.deals[id]?.evidence?.file;
         if (!file) fail('Attachment not found.', 404);
@@ -173,6 +197,12 @@ async function createApp({ dataDir = process.env.SAFEDEAL_DATA_DIR || path.join(
         if (!req.headers['content-type']?.includes('application/json')) fail('JSON is required.', 415);
         const body = await bodyOf(req);
         if (!ROLES.includes(body.role)) fail('Select a valid workspace role.', 403);
+        if (url.pathname.startsWith('/api/market/')) {
+          if (busy) fail('Another action is being confirmed. Please try again.', 409);
+          busy = true;
+          try { const selection = await market.mutate(url.pathname, body); return json({ ...(await snapshot()), ...selection }); }
+          finally { busy = false; }
+        }
         if (url.pathname === '/api/tests') {
           if (body.role !== 'admin') fail('Only the workspace admin can run tests.', 403);
           if (meta.tests.status === 'running') fail('Tests are already running.', 409);
@@ -194,7 +224,7 @@ async function createApp({ dataDir = process.env.SAFEDEAL_DATA_DIR || path.join(
         fail('Action not found.', 404);
       }
       if (req.method === 'GET') {
-        const allowed = { '/': 'index.html', '/app.js': 'app.js', '/style.css': 'style.css', '/favicon.svg': 'favicon.svg' };
+        const allowed = { '/': 'index.html', '/app.js': 'app.js', '/marketplace.js': 'marketplace.js', '/marketplace.css': 'marketplace.css', '/style.css': 'style.css', '/favicon.svg': 'favicon.svg' };
         const asset = allowed[url.pathname];
         if (!asset) fail('Page not found.', 404);
         const filename = path.join(__dirname, 'public', asset);

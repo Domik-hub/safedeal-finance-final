@@ -1,0 +1,27 @@
+SafeDeal 1.1.0 — marketplace verification
+Date: 2026-11-15
+Runtime: Node.js 24.22.1, Windows
+
+Command:
+node --test --test-reporter=tap --test-concurrency=1 test/workflow.test.cjs test/app.test.cjs test/marketplace.test.cjs
+
+Result: 31 tests, 31 passed, 0 failed, 0 skipped, 0 cancelled.
+Duration: 54.240 seconds.
+16 contract tests + 6 existing HTTP tests + 9 marketplace HTTP tests.
+Ganache used its JavaScript fallback because the optional native uWS binary
+was unavailable for this Node version. The suite completed successfully.
+
+Marketplace checks:
+- Client-only publication; valid amount, calendar date and scope checks.
+- Portfolio ownership and explicit consent to the complete brief.
+- Hiring creates a real local milestone for the selected freelancer signer.
+- Extra work requires request, hired freelancer quote and client acceptance.
+- Original scope, amount and deadline remain unchanged after accepted extra work.
+- Declining a change creates no milestone.
+- Delivery evidence and client review cover every acceptance check.
+- Wrong freelancer cannot deliver; portfolio links accept HTTP(S) only.
+- Agreement export includes original and extra milestones, without a workspace token.
+- Projects, proposals, profile edits, agreements and chain state survive restart.
+
+These are local automated tests, not an independent audit, real payments,
+customer validation or evidence of a deployed validator consortium.
