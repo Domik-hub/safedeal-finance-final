@@ -1,4 +1,5 @@
 const crypto = require('node:crypto');
+const { REVIEW_POLICY } = require('./reviews.cjs');
 
 const todayPlus = days => new Date(Date.now() + days * 86400000).toISOString().slice(0, 10);
 const uid = prefix => `${prefix}-${crypto.randomUUID().slice(0, 12)}`;
@@ -33,6 +34,9 @@ function seedMarketplace() {
 function createMarketplace({ meta, getFixture, save, log, send, hash, fail }) {
   meta.marketplace ||= seedMarketplace();
   const m = meta.marketplace;
+  // Do not silently change terms of previously accepted or already-proposed work.
+  for (const j of m.jobs) if (j.status === 'Open' && !j.reviewPolicy && !m.proposals.some(p => p.jobId === j.id)) j.reviewPolicy = { ...REVIEW_POLICY };
+  m.reviewPolicy = { ...REVIEW_POLICY };
   const text = (v, label, max = 2500) => {
     if (typeof v !== 'string' || !v.trim() || v.trim().length > max) fail(`${label} is required (maximum ${max} characters).`);
     return v.trim();
@@ -56,9 +60,10 @@ function createMarketplace({ meta, getFixture, save, log, send, hash, fail }) {
     if (!f.contract) fail('Initialize the local contract in Network & tests before hiring.', 409);
     const id = Number(await f.contract.nextId());
     const freelancerAddress = await signer(p.id).getAddress();
-    const agreed = { ...terms, projectId: j.id, freelancerId: p.id, freelancerAddress, changeId };
+    const agreed = { ...terms, reviewPolicy: j.reviewPolicy || null, projectId: j.id, freelancerId: p.id, freelancerAddress, changeId };
     const receipt = await send(f.contract.connect(f.client).create(freelancerAddress, terms.amount, hash(JSON.stringify(agreed))));
     meta.deals[id] = { title: terms.title, description: terms.description, dueDate: terms.dueDate, criteria: terms.criteria, createdAt: new Date().toISOString(), projectId: j.id, freelancerId: p.id, freelancerName: p.name, changeId, scopeAgreement: agreed };
+    if (j.reviewPolicy) meta.deals[id].expertReview = { policy: structuredClone(j.reviewPolicy), currentVersion: 0, deliveries: [], rounds: [] };
     log(changeId ? 'Additional scope agreed by both parties' : 'Proposal accepted and scope agreed', 'client', id, receipt, `${terms.amount.toLocaleString('en-US')} KZT · ${p.name} · ${terms.title}`);
     j.milestoneIds.push(id);
     return id;
@@ -68,7 +73,7 @@ function createMarketplace({ meta, getFixture, save, log, send, hash, fail }) {
     let selectedJobId = null, selectedId = null, selectedProfileId = null;
     if (route === '/api/market/jobs') {
       requireRole(b, 'client');
-      const j = { id: uid('job'), title: text(b.title, 'Project title', 110), description: text(b.description, 'Project brief', 3000), category: text(b.category, 'Category', 60), budget: amount(b.budget), dueDate: date(b.dueDate), skills: list(b.skills, 'skills'), criteria: criteria(list(b.criteria, 'acceptance checks')), status: 'Open', sample: false, createdAt: new Date().toISOString(), milestoneIds: [] };
+      const j = { id: uid('job'), title: text(b.title, 'Project title', 110), description: text(b.description, 'Project brief', 3000), category: text(b.category, 'Category', 60), budget: amount(b.budget), dueDate: date(b.dueDate), skills: list(b.skills, 'skills'), criteria: criteria(list(b.criteria, 'acceptance checks')), status: 'Open', reviewPolicy: { ...REVIEW_POLICY }, sample: false, createdAt: new Date().toISOString(), milestoneIds: [] };
       m.jobs.unshift(j); selectedJobId = j.id;
       log('Project published', 'client', null, null, j.title);
     } else if (route === '/api/market/portfolio') {
@@ -93,19 +98,21 @@ function createMarketplace({ meta, getFixture, save, log, send, hash, fail }) {
           if (j.status !== 'Open') fail('This project is no longer accepting proposals.', 409);
           if (m.proposals.some(x => x.jobId === j.id && x.profileId === p.id)) fail('You already sent a proposal for this project.', 409);
           if (b.acceptScope !== true) fail('Confirm that your proposal includes every acceptance check.');
+          if (j.reviewPolicy && b.acceptReview !== true) fail('Agree to independent review and the correction process before sending a proposal.');
           const portfolioIds = Array.isArray(b.portfolioIds) ? [...new Set(b.portfolioIds)] : [];
           if (!portfolioIds.length || portfolioIds.some(id => !p.portfolio.some(x => x.id === id))) fail('Select at least one project from your own portfolio.');
-          m.proposals.push({ id: uid('proposal'), jobId: j.id, profileId: p.id, amount: amount(b.amount), dueDate: date(b.dueDate), message: text(b.message, 'Proposal message', 2500), portfolioIds, acceptedCriteria: structuredClone(j.criteria), status: 'Pending', createdAt: new Date().toISOString() });
+          m.proposals.push({ id: uid('proposal'), jobId: j.id, profileId: p.id, amount: amount(b.amount), dueDate: date(b.dueDate), message: text(b.message, 'Proposal message', 2500), portfolioIds, acceptedCriteria: structuredClone(j.criteria), acceptedReviewPolicy: structuredClone(j.reviewPolicy || null), status: 'Pending', createdAt: new Date().toISOString() });
           log('Proposal received', 'freelancer', null, null, `${p.name} · ${j.title}`);
         } else if (match[2] === 'hire') {
           requireRole(b, 'client');
           if (j.status !== 'Open') fail('This project has already been hired or closed.', 409);
           const proposal = m.proposals.find(x => x.id === b.proposalId && x.jobId === j.id);
           if (!proposal || proposal.status !== 'Pending') fail('Available proposal not found.', 404);
+          if (j.reviewPolicy && b.acceptReviewFee !== true) fail('Confirm the expert-review fee before hiring.');
           const p = profile(proposal.profileId);
           selectedId = await createDeal(j, p, { title: j.title, description: j.description, amount: proposal.amount, dueDate: proposal.dueDate, criteria: structuredClone(proposal.acceptedCriteria) });
           j.status = 'Hired'; j.freelancerId = p.id; j.agreedAmount = proposal.amount; j.agreedDueDate = proposal.dueDate;
-          j.agreement = { amount: proposal.amount, dueDate: proposal.dueDate, criteria: structuredClone(proposal.acceptedCriteria), proposalId: proposal.id, agreedAt: new Date().toISOString() };
+          j.agreement = { reviewPolicy: structuredClone(j.reviewPolicy || null), amount: proposal.amount, dueDate: proposal.dueDate, criteria: structuredClone(proposal.acceptedCriteria), proposalId: proposal.id, agreedAt: new Date().toISOString() };
           for (const item of m.proposals.filter(x => x.jobId === j.id)) item.status = item.id === proposal.id ? 'Accepted' : 'Not selected';
         } else if (match[2] === 'close') {
           requireRole(b, 'client'); if (j.status !== 'Open') fail('Only an open project can be closed.', 409);
@@ -126,6 +133,7 @@ function createMarketplace({ meta, getFixture, save, log, send, hash, fail }) {
           log('Additional work quoted', 'freelancer', j.milestoneIds[0], null, `${quote.amount} KZT · waiting for client approval`);
         } else if (cm[2] === 'accept') {
           requireRole(b, 'client'); if (change.status !== 'Quoted') fail('The freelancer must quote this request first.', 409);
+          if (j.reviewPolicy && b.acceptReviewFee !== true) fail('Confirm the separate expert-review fee for this additional milestone.');
           selectedId = await createDeal(j, profile(j.freelancerId), { title: change.title, description: change.description, amount: change.quote.amount, dueDate: change.quote.dueDate, criteria: structuredClone(change.criteria) }, change.id);
           change.status = 'Accepted'; change.milestoneId = selectedId; change.acceptedAt = new Date().toISOString();
         } else {

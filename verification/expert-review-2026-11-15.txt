@@ -1,0 +1,25 @@
+SafeDeal 1.2.0 — expert review and scope protection
+Date: 2026-11-15
+Runtime: Node.js 24.22.1, Windows, Ganache JavaScript fallback
+
+Command: node --test --test-reporter=tap --test-concurrency=1 test/app.test.cjs test/marketplace.test.cjs test/reviews.test.cjs test/workflow.test.cjs
+Result: 38 tests; 38 passed; 0 failed; 0 skipped; 0 cancelled.
+Duration: 42.907 seconds.
+
+The previous 31 contract, HTTP and marketplace tests still pass.
+Seven new integration tests cover:
+1. Freelancer and client consent to expert-review terms before hiring.
+2. Assignment, no-conflict declaration, complete criterion reports and the initial approval gate.
+3. Failed reports block normal approval; fixed expert compensation is recorded regardless of outcome.
+4. Corrections preserve price/scope; each new version needs a newly agreed recheck.
+5. A second opinion uses another expert; earlier passes cannot bypass a pending review.
+6. Latest passed report permits client acceptance and settlement; review charges do not inflate principal.
+7. Downloadable report history and review records survive restart.
+
+Browser verification: published a criterion-by-criterion fictional expert report,
+confirmed client correction/second-opinion controls and absence of normal approval
+after a failed check; checked the separately quoted extra-work record.
+
+This verifies local software behavior only. No real expert inspected a real cafe
+website, no funds moved, and no reviewer or customer demand was validated.
+The report gate is enforced by the local HTTP service, not the Solidity contract alone.

@@ -2,7 +2,7 @@ Educational project for the course Introduction to Finance. Not a real product, 
 
 # SafeDeal — working local website
 
-SafeDeal is a working educational marketplace: clients publish briefs, freelancers submit proposals with relevant portfolio work, and the client hires against agreed acceptance checks. The central product feature is explicit approval of extra scope: request → freelancer quote → client approval → separate milestone. The original scope, price and deadline remain on record. This is our product focus, not evidence that competitors lack similar capabilities or that customers will prefer it.
+SafeDeal is a working educational marketplace: clients publish briefs, freelancers submit proposals with relevant portfolio work, and the client hires against agreed acceptance checks. Its main product focus is independent specialist review before final acceptance. Its complementary protection is explicit approval of extra scope: request → freelancer quote → client approval → separate milestone. The original scope, price and deadline remain on record. These are our product choices, not proof that competitors lack similar capabilities or that customers will prefer SafeDeal.
 
 The English interface also includes delivery evidence for each acceptance check, attachment upload/download, client review, arbiter decisions and transaction history. Marketplace records are saved on the server. Hiring and accepted extra work create real Solidity milestones on a local Ganache chain; milestone status changes are signed and read back from that contract.
 
@@ -32,7 +32,27 @@ The seeded people, portfolio concepts and briefs are labelled fictional. Proposa
 
 Tested with Node.js 24.22.1. Ganache can print an optional native uWS warning and fall back to JavaScript; the tested workflow works with that fallback.
 
-## Try a complete agreement
+## Independent expert review (version 1.2)
+
+New marketplace agreements include the review service and its price schedule before hiring. Both the proposal and the client hiring form require consent. Existing hired agreements are preserved with their original terms; create a new project to demonstrate the new review workflow.
+
+1. Submit a marketplace delivery as the hired freelancer. The first review is assigned to **Nina Brooks**, a fictional expert profile separate from the freelancer profiles.
+2. Select **Expert → Expert reviews → Open review → Write expert report**. Inspect the supplied evidence. Record **Passed**, **Needs correction** or **Unable to verify** for every agreed check, explain the result, summarize it in plain English and declare no conflict of interest.
+3. The client reads or downloads the report. A failed or unverified check blocks normal client approval. Expert compensation is recorded for completing the report, regardless of its verdict.
+4. For a defect in the original scope, the client chooses **Request corrections & recheck** and explicitly agrees to the recheck fee. The hired freelancer uses **Submit corrections**. Earlier delivery versions and reports remain stored. A new expert report must cover the current version before approval.
+5. Either party can request one **second opinion per delivery version**, explicitly accepting its service fee. The system assigns the other expert profile. The earlier pass cannot be used while this review is pending. A completed second opinion may still be challenged through the existing formal dispute process.
+6. After all checks pass, the client confirms acceptance and the adapter records simulated settlement. If a formal dispute is used instead, an arbiter may decide the release/refund split after the current expert report is complete. The expert does not authorize payment or replace the arbiter.
+7. New features use **Request extra work**, not correction requests. They keep their own price, scope, deadline, review fee and milestone. For example, a broken agreed form is a correction; an unrequested online store is additional scope.
+
+The initial pilot review price is **15,000 KZT**, with **10,000 KZT** fixed expert compensation. A correction recheck is provisionally **5,000 / 5,000 KZT**, and a second opinion **15,000 / 10,000 KZT** (service price / expert compensation). These are unvalidated planning choices, before applicable review-service taxes, payment-provider charges, support and other costs. The recheck and second-opinion prices were chosen for this demonstration, not sourced market quotes. No fees are actually collected and no expert is actually paid or contacted. Recurring-client packages remain a future idea.
+
+**Technical boundary:** reports, compensation records and corrected delivery versions are saved off chain with SHA256 fingerprints. The existing Solidity contract records the initial delivery fingerprint and milestone state. The local HTTP server enforces the expert gate; the contract alone does not enforce the expert service. Demo profile/role selectors are not authenticated identities or proof of actual independence. Expert reviewers are not blockchain validators. A production service needs credential vetting, conflict checks, reviewer capacity, contractual responsibilities, authentication and a payment-provider integration. No actual expert recruitment or quality certification is claimed.
+
+The seven review integration tests cover consent, assignment, conflict declarations, complete reports, failure gates, unchanged original terms, corrected-version handling, independent appeals, fixed compensation, settlement, report export and restart persistence. Together with the previous tests, **38 tests passed on 15 November 2026**. Run `npm run test:all` or `npm run test:reviews`.
+
+Positioning source: Upwork's [roles and responsibilities article](https://support.upwork.com/hc/en-us/articles/19892282107411--Roles-and-responsibilities-on-Upwork), which discusses Enterprise clients, assigns deliverable review to the client and disclaims responsibility for freelancer work quality. Its [scope and payments guidance](https://support.upwork.com/hc/en-us/articles/56862117008659-Working-with-Clients-on-Upwork-Expectations-for-Job-Posts-Scope-and-Payments) also prohibits unilateral scope changes. Checked 15 November 2026. These support a focused positioning hypothesis, not a claim that no Upwork service or competing provider offers expert review.
+
+## Direct milestone workflow (legacy agreements)
 
 1. **Client:** choose Milestones → New milestone. Enter a title, scope, integer KZT amount and delivery date.
 2. **Payment adapter:** open the milestone and confirm a simulated reservation with a unique reference.
@@ -58,7 +78,7 @@ Use Overview for current totals, Milestones for search/status filters, Activity 
 npm test
 npm run test:app
 npm run test:market
-# All 31 tests:
+# All 38 tests:
 npm run test:all
 ```
 
@@ -80,12 +100,14 @@ This earlier recording shows the original milestone workflow. It does not show t
 
 - `app-server.cjs`: local API, validation, signer selection, persistent metadata and test runner.
 - `marketplace.cjs`: projects, profiles, proposals, agreed scope and bilateral change requests.
+- `reviews.cjs`: independent reports, fixed compensation records, corrections, second opinions and approval gates.
 - `public/`: responsive website and interface logic.
 - `contracts/MilestoneWorkflow.sol`: role/state rules and amount conservation.
 - `lib.cjs`: compiler and local chain setup.
 - `test/workflow.test.cjs`: 16 contract tests.
 - `test/app.test.cjs`: 6 server integration tests.
 - `test/marketplace.test.cjs`: 9 marketplace integration tests.
+- `test/reviews.test.cjs`: 7 expert-review integration tests.
 - `sample-deliverables/`: fictional file used in the new demonstration.
 
 The contract has no payable function, token transfer or external custody call. Terms/delivery hashes and decisions are on chain; descriptions, dates and attachment bytes are off chain. Reservation and settlement references cannot be reused. Privileged signer roles are separate. The admin may pause but cannot replace the client's approval or the arbiter's decision. State checks remain enforced by the contract, independently of the visible buttons.

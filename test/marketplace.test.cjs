@@ -8,7 +8,7 @@ let app, token, jobId, proposalId, dealId, changeId, original;
 const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'safedeal-market-test-'));
 const getState = async () => (await fetch(`${app.url}/api/state`)).json();
 async function post(route, role, body = {}, expected = 200, profileId = 'alex') {
-  const res = await fetch(app.url + route, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-SafeDeal-Token': token }, body: JSON.stringify({ ...body, role, profileId }) });
+  const res = await fetch(app.url + route, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-SafeDeal-Token': token }, body: JSON.stringify({ acceptReview: true, acceptReviewFee: true, ...body, role, profileId }) });
   const data = await res.json(); assert.equal(res.status, expected, data.error); return data;
 }
 before(async () => { app = await createApp({ dataDir, port: 0 }); token = (await getState()).token; await post('/api/deploy', 'admin'); });
@@ -78,6 +78,9 @@ test('delivery needs evidence for every check and the client must confirm all ch
   await post(`/api/deals/${dealId}/submit`, 'freelancer', { ...body, criteriaEvidence: [] }, 400);
   await post(`/api/deals/${dealId}/submit`, 'freelancer', { ...body, criteriaEvidence: [proof[0], proof[0]] }, 400);
   await post(`/api/deals/${dealId}/submit`, 'freelancer', body);
+  const reviewState = await getState();
+  const reviewed = reviewState.deals.find(d => d.id === dealId);
+  await post(`/api/reviews/${dealId}/report`, 'expert', { expertId: 'nina', noConflict: true, summary: 'All agreed checks passed in this fictional test.', checks: reviewed.criteria.map(c => ({ id: c.id, status: 'Passed', note: 'Checked against the fictional delivered file.' })) });
   await post(`/api/deals/${dealId}/approve`, 'client', {}, 400);
   await post(`/api/deals/${dealId}/approve`, 'client', { checkedCriteriaIds: [proof[0].id] }, 400);
   await post(`/api/deals/${dealId}/approve`, 'client', { checkedCriteriaIds: proof.map(c => c.id) });
